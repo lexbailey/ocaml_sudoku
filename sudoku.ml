@@ -1,4 +1,5 @@
 let rw = 2 ;; (* root width. 2 means you get a 4*4 board, 3 means 9*9 *)
+
 let w = rw * rw ;; (* width *)
 let n_cells = w * w ;; (* total number of cells on the board *)
 
@@ -19,8 +20,26 @@ let test_board: board =
     [ None; None; None; Some(1)
     ; Some(1); Some(2); None; None
     ; None; None; None; None
-    ; None; None; None; None
+    ; Some(2); None; Some(3); None
     ] ;;
+
+let rec take n l = (* yikes why is this not a builtin *)
+    match n with
+        | 0 -> []
+        | _ -> if ((List.length l) > 0) then List.cons (List.hd l) (take (n-1) (List.tl l)) else []
+    ;;
+
+let rec drop n l =
+    match n with
+        | 0 -> l
+        | _ -> if (List.length l) > 0 then drop (n-1) (List.tl l) else []
+    ;;
+
+let rec sublists l max_len =
+    let start = (take max_len l)
+    and _end = (drop max_len l)
+    in List.append [start;] (if (List.length _end = 0) then [] else (sublists _end max_len))
+    ;;
 
 (* List.filter_map introduced in 4.08, but I'm using 4.07 T_T *)
 let filter_map f l =
@@ -66,7 +85,7 @@ let str c = match c with
 
 let rec repeat_str s c n =
     match n with
-        | 0 -> s
+        | 1 -> s
         | _ -> repeat_str (s ^ c) c (n-1)
     ;;
 
@@ -78,10 +97,36 @@ let box_top n = "┌" ^ (repeat_char "─" n) ^ "┐" ;;
 let box_bottom n = "└" ^ (repeat_char "─" n) ^ "┘" ;;
 let box_section s = "│" ^ s ^ "│" ;;
 
+let grid_line n cols left mid right =
+    let bar = (repeat_char "─" n) in
+    left ^ (String.concat mid (List.init cols (function _ -> bar))) ^ right
+    ;;
+
+let grid_top n cols = grid_line n cols "┌" "┬" "┐" ;;
+let grid_mid n cols = grid_line n cols "├" "┼" "┤" ;;
+let grid_bot n cols = grid_line n cols "└" "┴" "┘" ;;
+
+(*
 let print_board b =
     let pr1 i c =
         Printf.printf "%s%s" (str c) (if ((i+1) mod w) == 0 then "\n" else " ")
     in List.iteri pr1 b
+    ;;
+*)
+
+let print_board b =
+    let lines = sublists b w in
+    List.iteri (fun i l ->
+        let llen = (List.length l)
+        and bwidth = 3
+        in
+        Printf.printf "%s\n%s\n%s"
+            (if (i = 0) then (grid_top bwidth llen) else (grid_mid bwidth llen))
+            (box_section (String.concat "│" (List.map (function a -> ((match a with | Some(n) -> Printf.sprintf " %d " n | None -> " ? "))) l)))
+            (if ((i+1) = (List.length lines)) then (grid_bot bwidth llen) else "")
+            (*(grid_bot 1 (List.length l))*)
+    ) lines ;
+    Printf.printf "\n"
     ;;
 
 let const_list value len =
@@ -135,7 +180,7 @@ let test_row = row 0 test_board;;
 let test_col = col 3 test_board;;
 
 Printexc.record_backtrace true;;
-Printf.printf "Board...\n" ;;
+Printf.printf "Initial board state...\n" ;;
 print_board test_board;;
 
 (* Compute the domain that contains all possible cell solutions for a given board state *)
@@ -159,17 +204,16 @@ let fully_constrained_cells domain =
     ;;
 
 (* Solve simple constraints until board is stable *)
-let rec resolve_simple b =
+let rec solved b =
     let cur_n = n_solved b
     and dom = domain b
     in let next = fully_constrained_cells dom
     in let next_n = n_solved next
-    in if (cur_n == next_n) then next else resolve_simple next
+    in if (cur_n == next_n) then next else solved next
     ;;
 
 let test_domain = domain test_board ;;
-(*let test_step = fully_constrained_cells test_domain ;;*)
-let test_step = resolve_simple test_board ;;
+let test_step = solved test_board ;;
 
 let print_set s =
     Printf.printf "[";
@@ -191,12 +235,7 @@ let boxes s bw bh =
         let top = String.concat " " (List.map (function _ -> box_top bw) s)
         and bot = String.concat " " (List.map (function _ -> box_bottom bw) s)
         and range = List.init bh (function i -> i) in
-            (*List.iter (function a -> Printf.printf "[%d]" a) range;*)
             let mids = List.map (function ss -> String.concat " " (List.map box_section ss)) (List.map (function n -> nth_of_each n s) range)
-
- (*range.map (function i
-                let 
-                (function ns -> String.concat " " (List.map (function a -> box_section a) ns))*)
             in let mid = String.concat "\n" mids
             in String.concat "\n" [top; mid; bot; ""]
     ;;
@@ -216,23 +255,6 @@ let normalise_widths ss n max_width =
     ) ss
     ;;
 
-let rec take n l = (* yikes why is this not a builtin *)
-    match n with
-        | 0 -> []
-        | _ -> if ((List.length l) > 0) then List.cons (List.hd l) (take (n-1) (List.tl l)) else []
-    ;;
-
-let rec drop n l =
-    match n with
-        | 0 -> l
-        | _ -> if (List.length l) > 0 then drop (n-1) (List.tl l) else []
-    ;;
-
-let rec sublists l max_len =
-    let start = (take max_len l)
-    and _end = (drop max_len l)
-    in List.append [start;] (if (List.length _end = 0) then [] else (sublists _end max_len))
-    ;;
 
 let sets_to_lines ss el_width els_per_line =
     List.map (function s ->
@@ -257,33 +279,10 @@ let box_grid b width height el_width els_per_line max_el_lines =
     )
     ;;
 
-(*
-Printf.printf "%s" (box_top 3) ;;
-Printf.printf "%s" (box_bottom 3) ;;
-Printf.printf "\n" ;;
+let print_domain d = Printf.printf "%s" (box_grid d w w rw rw rw) ;;
 
-Printf.printf "%s" (boxes [[" 0 1 2"; "123423"];["test"];["foo";"bar"]] 3 2 ) ;;
-Printf.printf "%s" (boxes (normalise_widths [[" 0 1 2"; "123423"];["test"];["foo";"bar"]] 3 9) 9 2 ) ;;
-Printf.printf "%s" (boxes (normalise_widths (sets_to_lines test_domain 1 3) 3 9) 9 2 ) ;;
-Printf.printf "\n" ;;
-Printf.printf "\n" ;;
-*)
-Printf.printf "%s" (box_grid test_domain w w rw rw rw) ;;
-
-(*let set_square_string set max_size max_digits =
-    let tostr a = Printf.sprintf "%*d" max_digits a
-    in let strings = List.map tostr (IntSet.elements set)
-    in *)
-
-let print_domain d =
-    Printf.printf "The largest set is of size %d\n" (largest d);
-    List.map print_set d
-    ;;
-
+Printf.printf "The board state above describes a subset of the following domain...\n" ;;
 print_domain test_domain ;;
 
-(*List.iter print_set test_domain
-    ;;*)
-
-Printf.printf "After solving simple constraints:\n" ;;
+Printf.printf "After solving simple constraints repeatedly until stability is reached:\n" ;;
 print_board test_step;;
