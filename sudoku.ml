@@ -20,7 +20,7 @@ let test_board: board =
     [ None; None; None; Some(1)
     ; Some(1); Some(2); None; None
     ; None; None; None; None
-    ; Some(2); None; Some(3); None
+    ; None; None; None; None
     ] ;;
 
 let rec take n l = (* yikes why is this not a builtin *)
@@ -137,13 +137,6 @@ let const_list value len =
 let lfalse len = const_list false len;;
 let ltrue len = const_list true len;;
 
-(* Extract a row of cells from a board *)
-let row n b =
-    let low = w * n and high = w * (n + 1)
-    in let pattern = List.append (List.append (lfalse low) (ltrue w)) (lfalse ((w * w) - high))
-    in subboard b pattern
-    ;;
-
 let rec repeat l n =
     match n with
         | 0 -> []
@@ -151,22 +144,30 @@ let rec repeat l n =
         | _ -> List.append l (repeat l (n - 1))
     ;;
 
-(* Extract a row of columns from a board *)
-let col n b =
+(* Extract a row of cells from a board *)
+let row_pattern n =
+    let low = w * n and high = w * (n + 1)
+    in List.append (List.append (lfalse low) (ltrue w)) (lfalse ((w * w) - high))
+    ;;
+
+(* Extract a column of cells from a board *)
+let col_pattern n =
     let before = n and after = ((w - n) - 1) in
-    let one_row = List.append (lfalse before) (List.cons true (lfalse after)) in
-    let pattern = repeat one_row w
-    in subboard b pattern
+    let one_row = List.append (lfalse before) (List.cons true (lfalse after))
+    in repeat one_row w
     ;;
 
 (* Extract a block from a board *)
-let block n b =
+let block_pattern n =
     let x = (n mod rw) and y = (n / rw) in
     let on_row = List.append (lfalse (x*rw)) (List.append (ltrue rw) (lfalse (rw * (rw - (x+1)))))
     and off_row = lfalse w
-    in let pattern = List.append (repeat off_row (y*rw)) (List.append (repeat on_row rw) (repeat off_row (rw * (rw - (y+1)))))
-    in subboard b pattern
+    in List.append (repeat off_row (y*rw)) (List.append (repeat on_row rw) (repeat off_row (rw * (rw - (y+1)))))
     ;;
+
+let row n b = subboard b (row_pattern n);;
+let col n b = subboard b (col_pattern n);;
+let block n b = subboard b (block_pattern n);;
 
 (* get Row, Column, and Block ids from cell id *)
 let rcb i =
@@ -197,6 +198,57 @@ let domain board =
     in List.mapi this_cell_domain board
     ;;
 
+(* Imperitive code! Oh my! (this function was hard to think about functionally) :P *)
+let splice_domain domain new_vals pattern =
+    let sz = List.length domain
+    and result = ref []
+    and v_index = ref 0 in
+    for i = 0 to sz-1 do
+        match List.nth pattern i with
+            | true -> ((result := List.append (!result) [(List.nth new_vals (!v_index))]); (v_index := (!v_index) + 1))
+            | false -> (result := List.append (!result) [(List.nth domain i)]);
+    done;
+    !result
+    ;;
+
+let reduce_option_sets_for_size n sets =
+    let size_is_n s = (IntSet.cardinal s) = n in
+    let num_sets_of_size_n = List.length (List.filter size_is_n sets) in
+    if num_sets_of_size_n != n then sets else
+        let base_set = List.find size_is_n sets in
+        List.map (function s -> if (IntSet.cardinal s) > n then IntSet.diff s base_set else s) sets
+    ;;
+
+let reduce_domain_for_size_and_group n d g =
+    print_domain d;
+    let old_sets = subboard d g in
+    let new_sets = reduce_option_sets_for_size n old_sets in
+    print_domain (splice_domain d new_sets g);
+    splice_domain d new_sets g
+    ;;
+
+let reduce_domain_for_size n d =
+    (* d is a domain (a list of sets of allowed valus) and we need to return another domain *)
+    (* this is the case for n, we need to operate on every group of size n in every constraint set
+    in the domain where the cardinality of each set is n and the sets are all equal to each other *)
+    (*let patterns = [row_pattern; col_pattern; block_pattern]*)
+    let patterns = [col_pattern; row_pattern]
+    and reduce domain pattern = reduce_domain_for_size_and_group n d (pattern 0)
+    in List.fold_left reduce d patterns
+    ;;
+
+let rec reduce_domain_all_sizes n d =
+    match n with
+        | 0 -> d (* base case is zero case, already solved by construction *)
+        | _ -> (* all other cases solved from largest sets to smallest sets *)
+            let d1 = reduce_domain_for_size n d
+            in reduce_domain_all_sizes (n - 1) d1
+    ;;
+
+let reduce_domain d =
+    reduce_domain_all_sizes (w - 1) d
+    ;;
+
 (* find the board, in the given domain, containing all fully constrained cells *)
 let fully_constrained_cells domain =
     let singleton s = if IntSet.cardinal s = 1 then Some(IntSet.choose s) else None
@@ -213,6 +265,7 @@ let rec solved b =
     ;;
 
 let test_domain = domain test_board ;;
+let test_domain2 = reduce_domain (domain test_board) ;;
 let test_step = solved test_board ;;
 
 let print_set s =
@@ -220,9 +273,9 @@ let print_set s =
     List.iter (function a -> Printf.printf "%d," a) (IntSet.elements s) ;
     Printf.printf "]\n";;
 
-let largest sets =
+(*let largest sets =
     let max a b = if a > b then a else b
-    in List.fold_left max 0 (List.map IntSet.cardinal sets)
+    in List.fold_left max 0 (List.map IntSet.cardinal sets)*)
 
 
 let nth_of_each n l =
@@ -255,7 +308,6 @@ let normalise_widths ss n max_width =
     ) ss
     ;;
 
-
 let sets_to_lines ss el_width els_per_line =
     List.map (function s ->
         List.map (function l -> String.concat " " l) (
@@ -270,7 +322,7 @@ let box_grid b width height el_width els_per_line max_el_lines =
     let lines = sublists b width
     and bw = els_per_line * (el_width + 1)
     in
-    String.concat "\n" (
+    String.concat "" (
         List.map (function l ->
             boxes (normalise_widths (sets_to_lines l el_width els_per_line) max_el_lines bw )
             bw
@@ -283,6 +335,7 @@ let print_domain d = Printf.printf "%s" (box_grid d w w rw rw rw) ;;
 
 Printf.printf "The board state above describes a subset of the following domain...\n" ;;
 print_domain test_domain ;;
+print_domain test_domain2 ;;
 
 Printf.printf "After solving simple constraints repeatedly until stability is reached:\n" ;;
 print_board test_step;;
