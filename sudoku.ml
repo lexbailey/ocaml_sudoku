@@ -1,4 +1,4 @@
-let rw = 2 ;; (* root width. 2 means you get a 4*4 board, 3 means 9*9 *)
+let rw = 3 ;; (* root width. 2 means you get a 4*4 board, 3 means 9*9 *)
 
 let w = rw * rw ;; (* width *)
 let n_cells = w * w ;; (* total number of cells on the board *)
@@ -9,19 +9,75 @@ module Int = struct
 end
 module IntSet = Set.Make(Int);;
 
+let pp = Printf.printf ;;
+
 type cell = int option ;;
 type board = cell list ;;
 type domain_board = IntSet.t list ;;
 
 (* Set of all numbers that can be placed in a cell *)
-let cell_domain = IntSet.of_list (List.init w (fun x -> x+1))
+let cell_domain = IntSet.of_list (List.init w (fun x -> x+1)) ;;
 
+let max_cell_width = Float.to_int (Float.ceil (Float.log10 (Float.of_int w)));;
+
+(*
 let test_board: board =
     [ None; None; None; Some(1)
     ; Some(1); Some(2); None; None
     ; None; None; None; None
     ; None; None; None; None
     ] ;;
+*)
+
+
+let test_board: board =
+    [ None;    None;    None;      None;    None;    None;      Some(6); Some(1); Some(9);
+      None;    Some(2); Some(3);   None;    Some(9); None;      None;    None;    None;
+      None;    None;    None;      Some(1); Some(4); None;      None;    Some(2); None;
+
+      None;    None;    Some(9);   None;    None;    None;      None;    None;    None;
+      Some(7); None;    Some(8);   None;    None;    Some(3);   None;    None;    None;
+      None;    None;    None;      None;    None;    Some(5);   Some(3); Some(4); None;
+
+      None;    None;    None;      None;    None;    None;      Some(4); Some(6); Some(7);
+      Some(8); Some(3); None;      None;    None;    None;      None;    None;    None;
+      None;    None;    None;      Some(6); Some(1); Some(2);   None;    None;    None;
+    ] ;;
+
+(*
+let test_board_: board =
+    [
+      Some( 1); Some( 2); Some(-1); Some(11);   Some(-1); Some(-1); Some(-1); Some(16);   Some(-1); Some(-1); Some(14); Some(-1);   Some(-1); Some(-1); Some( 4); Some(-1);
+      Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(11); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some( 1); Some(-1);
+      Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some( 3); Some( 5); Some(-1);
+      Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some( 7);   Some(-1); Some(-1); Some(16); Some(-1);
+
+      Some(-1); Some( 8); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some( 1);
+      Some( 2); Some( 5); Some(13); Some(10);   Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some( 1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some( 4);
+      Some(-1); Some( 3); Some(-1); Some(-1);   Some( 4); Some( 6); Some(16); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some( 7);
+      Some(-1); Some( 9); Some(-1); Some(12);   Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some( 2); Some(-1);   Some(-1); Some(-1); Some(-1); Some( 8);
+
+      Some(-1); Some(-1); Some( 2); Some(-1);   Some(-1); Some( 5); Some(-1); Some(-1);   Some(-1); Some(-1); Some( 3); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1); (*6 9 10 12 13 15*)
+      Some(-1); Some(-1); Some( 8); Some(-1);   Some(-1); Some(-1); Some( 3); Some(-1);   Some(-1); Some( 5); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1);
+      Some(-1); Some(-1); Some( 6); Some(-1);   Some( 2); Some(-1); Some(-1); Some(13);   Some(12); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1);
+      Some( 5); Some(-1); Some(-1); Some(-1);   Some( 1); Some(14); Some(12); Some(-1);   Some( 1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1);
+
+      Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some( 2);
+      Some( 3); Some( 2); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1);   Some( 7); Some(-1); Some(-1); Some(11);
+      Some(-1); Some(-1); Some(-1); Some(-1);   Some( 3); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some(14);
+      Some(12); Some(-1); Some(-1); Some( 7);   Some(-1); Some(-1); Some(-1); Some(-1);   Some( 8); Some( 9); Some(10); Some(11);   Some(-1); Some(-1); Some(-1); Some(16);
+    ] ;;
+
+let noneify b =
+    List.map (function m ->
+        match m with
+            | Some(-1) -> None
+            | Some(a) -> Some(a)
+            | None -> None
+    ) b;;
+
+let test_board: board = noneify test_board_
+*)
 
 let rec take n l = (* yikes why is this not a builtin *)
     match n with
@@ -58,16 +114,6 @@ let filter_map f l =
 let n_solved b =
     List.length (List.filter ((!=) None) b)
     ;;
-
-(*
-let b_to_s b = match b with | true -> "True" | false -> "False" ;;
-let print_list b =
-    let pr c =
-        Printf.printf "%s " (b_to_s c)
-    in List.iter pr b ;
-    Printf.printf "\n"
-    ;;
-*)
 
 (* Given a board, and a list of bools, return the "sub-board" (a row or column or block, normally, but can be an arbitrary pattern) *)
 let subboard a_board pattern =
@@ -106,23 +152,15 @@ let grid_top n cols = grid_line n cols "┌" "┬" "┐" ;;
 let grid_mid n cols = grid_line n cols "├" "┼" "┤" ;;
 let grid_bot n cols = grid_line n cols "└" "┴" "┘" ;;
 
-(*
-let print_board b =
-    let pr1 i c =
-        Printf.printf "%s%s" (str c) (if ((i+1) mod w) == 0 then "\n" else " ")
-    in List.iteri pr1 b
-    ;;
-*)
-
 let print_board b =
     let lines = sublists b w in
     List.iteri (fun i l ->
         let llen = (List.length l)
-        and bwidth = 3
+        and bwidth = max_cell_width + 2
         in
         Printf.printf "%s\n%s\n%s"
             (if (i = 0) then (grid_top bwidth llen) else (grid_mid bwidth llen))
-            (box_section (String.concat "│" (List.map (function a -> ((match a with | Some(n) -> Printf.sprintf " %d " n | None -> " ? "))) l)))
+            (box_section (String.concat "│" (List.map (function a -> ((match a with | Some(n) -> Printf.sprintf " %*d " max_cell_width n | None -> (repeat_char " " bwidth)))) l)))
             (if ((i+1) = (List.length lines)) then (grid_bot bwidth llen) else "")
             (*(grid_bot 1 (List.length l))*)
     ) lines ;
@@ -169,16 +207,19 @@ let row n b = subboard b (row_pattern n);;
 let col n b = subboard b (col_pattern n);;
 let block n b = subboard b (block_pattern n);;
 
-(* get Row, Column, and Block ids from cell id *)
-let rcb i =
-    let row = i / w
-    and col = (i mod w)
-    and block = (rw*(i/rw/rw/rw)) + ((i/rw) mod rw)
-    in (row, col, block)
-    ;;
+let print_set s =
+    Printf.printf "[";
+    List.iter (function a -> Printf.printf "%d," a) (IntSet.elements s) ;
+    Printf.printf "]\n";;
 
-let test_row = row 0 test_board;;
-let test_col = col 3 test_board;;
+let print_list_of_sets l =
+    List.iter print_set l;;
+
+let print_list_of_bool l =
+    List.iter (pp "%B, ") l ; pp "\n" ;;
+
+let print_list_of_int l =
+    List.iter (pp "%d, ") l; pp "\n" ;;
 
 Printexc.record_backtrace true;;
 Printf.printf "Initial board state...\n" ;;
@@ -189,94 +230,9 @@ let domain board =
     let this_cell_domain i v =
         match v with
             | Some(a) -> IntSet.singleton a
-            | None ->
-                let (r, c, b) = rcb i in
-                let rs = row r board
-                and cs = col c board
-                and bs = block b board
-                in IntSet.diff cell_domain (IntSet.of_list (filter_map (function a -> a) (List.concat [rs; cs; bs])))
+            | None -> cell_domain
     in List.mapi this_cell_domain board
     ;;
-
-(* Imperitive code! Oh my! (this function was hard to think about functionally) :P *)
-let splice_domain domain new_vals pattern =
-    let sz = List.length domain
-    and result = ref []
-    and v_index = ref 0 in
-    for i = 0 to sz-1 do
-        match List.nth pattern i with
-            | true -> ((result := List.append (!result) [(List.nth new_vals (!v_index))]); (v_index := (!v_index) + 1))
-            | false -> (result := List.append (!result) [(List.nth domain i)]);
-    done;
-    !result
-    ;;
-
-let reduce_option_sets_for_size n sets =
-    let size_is_n s = (IntSet.cardinal s) = n in
-    let num_sets_of_size_n = List.length (List.filter size_is_n sets) in
-    if num_sets_of_size_n != n then sets else
-        let base_set = List.find size_is_n sets in
-        List.map (function s -> if (IntSet.cardinal s) > n then IntSet.diff s base_set else s) sets
-    ;;
-
-let reduce_domain_for_size_and_group n d g =
-    print_domain d;
-    let old_sets = subboard d g in
-    let new_sets = reduce_option_sets_for_size n old_sets in
-    print_domain (splice_domain d new_sets g);
-    splice_domain d new_sets g
-    ;;
-
-let reduce_domain_for_size n d =
-    (* d is a domain (a list of sets of allowed valus) and we need to return another domain *)
-    (* this is the case for n, we need to operate on every group of size n in every constraint set
-    in the domain where the cardinality of each set is n and the sets are all equal to each other *)
-    (*let patterns = [row_pattern; col_pattern; block_pattern]*)
-    let patterns = [col_pattern; row_pattern]
-    and reduce domain pattern = reduce_domain_for_size_and_group n d (pattern 0)
-    in List.fold_left reduce d patterns
-    ;;
-
-let rec reduce_domain_all_sizes n d =
-    match n with
-        | 0 -> d (* base case is zero case, already solved by construction *)
-        | _ -> (* all other cases solved from largest sets to smallest sets *)
-            let d1 = reduce_domain_for_size n d
-            in reduce_domain_all_sizes (n - 1) d1
-    ;;
-
-let reduce_domain d =
-    reduce_domain_all_sizes (w - 1) d
-    ;;
-
-(* find the board, in the given domain, containing all fully constrained cells *)
-let fully_constrained_cells domain =
-    let singleton s = if IntSet.cardinal s = 1 then Some(IntSet.choose s) else None
-    in List.map singleton domain
-    ;;
-
-(* Solve simple constraints until board is stable *)
-let rec solved b =
-    let cur_n = n_solved b
-    and dom = domain b
-    in let next = fully_constrained_cells dom
-    in let next_n = n_solved next
-    in if (cur_n == next_n) then next else solved next
-    ;;
-
-let test_domain = domain test_board ;;
-let test_domain2 = reduce_domain (domain test_board) ;;
-let test_step = solved test_board ;;
-
-let print_set s =
-    Printf.printf "[";
-    List.iter (function a -> Printf.printf "%d," a) (IntSet.elements s) ;
-    Printf.printf "]\n";;
-
-(*let largest sets =
-    let max a b = if a > b then a else b
-    in List.fold_left max 0 (List.map IntSet.cardinal sets)*)
-
 
 let nth_of_each n l =
     List.map (function sl -> match List.nth_opt sl n with | Some(a) -> a | None -> "") l
@@ -284,13 +240,12 @@ let nth_of_each n l =
 
 (* s is a list of lists of strings *)
 let boxes s bw bh =
-    let l = List.length s in
-        let top = String.concat " " (List.map (function _ -> box_top bw) s)
-        and bot = String.concat " " (List.map (function _ -> box_bottom bw) s)
-        and range = List.init bh (function i -> i) in
-            let mids = List.map (function ss -> String.concat " " (List.map box_section ss)) (List.map (function n -> nth_of_each n s) range)
-            in let mid = String.concat "\n" mids
-            in String.concat "\n" [top; mid; bot; ""]
+    let top = String.concat " " (List.map (function _ -> box_top bw) s)
+    and bot = String.concat " " (List.map (function _ -> box_bottom bw) s)
+    and range = List.init bh (function i -> i) in
+        let mids = List.map (function ss -> String.concat " " (List.map box_section ss)) (List.map (function n -> nth_of_each n s) range)
+        in let mid = String.concat "\n" mids
+        in String.concat "\n" [top; mid; bot; ""]
     ;;
 
 let padding = repeat_char " " ;;
@@ -333,9 +288,96 @@ let box_grid b width height el_width els_per_line max_el_lines =
 
 let print_domain d = Printf.printf "%s" (box_grid d w w rw rw rw) ;;
 
-Printf.printf "The board state above describes a subset of the following domain...\n" ;;
-print_domain test_domain ;;
-print_domain test_domain2 ;;
+(* Imperitive code! Oh my! (this function was hard to think about functionally) :P *)
+let splice_domain domain new_vals pattern =
+    let sz = List.length domain
+    and result = ref []
+    and v_index = ref 0 in
+    for i = 0 to sz-1 do
+        match List.nth pattern i with
+            | true -> ((result := List.append (!result) [(List.nth new_vals (!v_index))]); (v_index := (!v_index) + 1))
+            | false -> (result := List.append (!result) [(List.nth domain i)]);
+    done;
+    !result
+    ;;
 
-Printf.printf "After solving simple constraints repeatedly until stability is reached:\n" ;;
-print_board test_step;;
+let count_same i l =
+    List.length (List.filter (IntSet.equal i) l)
+    ;;
+
+let reducable_groups sets =
+    let n = IntSet.cardinal (List.hd sets) in
+    filter_map (function s ->
+        if (count_same s sets) == n then Some(s) else None
+    ) sets
+    ;;
+
+let reduce_option_sets_for_size n sets =
+    let size_is_n s = (IntSet.cardinal s) = n in
+    let sets_of_size_n = List.filter size_is_n sets in
+    let num_sets_of_size_n = List.length sets_of_size_n in
+    let reduce_set s base = if IntSet.equal s base then s else IntSet.diff s base in
+    if num_sets_of_size_n < n then sets else
+        let subgroups = reducable_groups sets_of_size_n
+        and reduce_one next_sets base_set = List.map (function s -> reduce_set s base_set) next_sets
+        in List.fold_left reduce_one sets subgroups
+    ;;
+
+let reduce_domain_for_size_and_group n d g =
+    let old_sets = subboard d g in
+    let new_sets = reduce_option_sets_for_size n old_sets in
+    splice_domain d new_sets g
+    ;;
+
+let cross l1 l2 =
+    let map1 i = List.map (function j -> (i, j)) l2
+    in List.flatten (List.map map1 l1)
+    ;;
+
+let reduce_domain_for_size n d =
+    let patterns = [row_pattern; col_pattern; block_pattern]
+    and range = List.init w (function i -> i)
+    in let reduce domain (pattern, index) =
+        reduce_domain_for_size_and_group n domain (pattern index)
+    in List.fold_left reduce d (cross patterns range)
+    ;;
+
+let rec reduce_domain_all_sizes n d =
+    match n with
+        | 0 -> d (* base case is zero case, already solved by construction *)
+        | _ -> (* all other cases solved from largest sets to smallest sets *)
+            let d1 = reduce_domain_for_size n d
+            in reduce_domain_all_sizes (n - 1) d1
+    ;;
+
+let reduce_domain d =
+    pp "\n###########################\n\n";
+    reduce_domain_all_sizes (w - 1) d
+    ;;
+
+(* find the board, in the given domain, containing all fully constrained cells *)
+let fully_constrained_cells domain =
+    let singleton s = if IntSet.cardinal s = 1 then Some(IntSet.choose s) else None
+    in List.map singleton domain
+    ;;
+
+let domains_equal a b =
+    List.fold_left (&&) true (List.map2 (IntSet.equal) a b)
+
+(* Solve simple constraints until board is stable *)
+let rec solved_domain d =
+    let d1 = reduce_domain d
+    in let stable = domains_equal d d1
+    in
+    print_domain d;
+    if stable then d1 else solved_domain d1
+    ;;
+
+let solved b =
+    let d = domain b
+    in fully_constrained_cells (solved_domain d)
+
+let solved_board = solved test_board ;;
+
+Printf.printf "After solving:\n" ;;
+print_board solved_board;;
