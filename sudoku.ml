@@ -155,16 +155,25 @@ let splice_domain domain new_vals pattern =
     !result
     ;;
 
-let count_same i l =
-    List.length (List.filter (IntSet.equal i) l)
-    ;;
-
 (* List of all pairs of elements (a, b) with a from l1 and b from l2 *)
 let cross l1 l2 =
     let map1 i = List.map (function j -> (i, j)) l2
     in List.flatten (List.map map1 l1)
     ;;
 
+(* Number of instances of item i in list l *)
+let count_same i l =
+    List.length (List.filter (IntSet.equal i) l)
+    ;;
+
+(* Given a list of sets of the same cardinality, returns a list of sets that appear in the given list exactly the same number
+   of times as the cardinality of the input sets
+   for example, given these input sets:
+      [{1,2,3}, {4,5,6}, {7,8,9}, {1,2,3}, {1,2,3} {4,5,6}, {4,5,6}]
+   this function returns the following list:
+      [{1,2,3}, {4,5,6}]
+   because the cardinality of the sets is 3, and the input list contains 3 occurrences of {1,2,3} and 3 occurrences of {4,5,6}
+ *)
 let reducable_groups sets =
     let n = IntSet.cardinal (List.hd sets) in
     filter_map (function s ->

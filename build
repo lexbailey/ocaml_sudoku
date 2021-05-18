@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+set -ex
+ocamlc types.ml printutils.ml sudoku.ml -o sudoku
