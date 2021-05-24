@@ -43,7 +43,7 @@ let rec sublists l max_len =
     in List.append [start;] (if (List.length _end = 0) then [] else (sublists _end max_len))
     ;;
 
-let max_cell_width w = Float.to_int (Float.ceil (Float.log10 (Float.of_int w)));;
+let max_cell_width w = max 1 (Float.to_int (Float.ceil (Float.log10 (Float.of_int w))));;
 
 let print_board b rw =
     let w = rw * rw
