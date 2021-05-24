@@ -42,37 +42,52 @@ domains without adding additional input constraints.
 
 The algorithm:
 
-   Starting with an input puzzle board of side length M=N*N with some empty cells and some fixed-value cells:
+    Starting with an input puzzle board of side length M=N*N with some empty cells and some fixed-value cells:
 
-   1) Construct a board domain where each cell domain is:
-      a singleton set if the input cell has a value, or
-      the fully unconstrained cell domain if the input cell is empty
+    1) Construct a board domain where each cell domain is:
+       a singleton set if the input cell has a value, or
+       the fully unconstrained cell domain if the input cell is empty
 
-   2) For each value of I in the range M-1 down to 1:
-          For each type T of constraint group:
-              For each constraint groups C of type T: (of which there are M)
-                  For each cell domain S of size I in C that appears I times in C:
-                      For each cell domain B in C that is not equal to S:
-                          Let B' = B - A
-                          replace B with B' in C
+    2) For each value of I in the range M-1 down to 1:
+           For each type T of constraint group:
+               For each constraint groups C of type T: (of which there are M)
+                   2A) For each cell domain S of size I in C that appears I times in C:
+                           For each cell domain B in C that is not equal to S:
+                               Let B' = B - A
+                               replace B with B' in C
+                   2B) For each value of J in the range 1 to M:
+                           if J only appears in the domain B of one of the cells in the constraint group
+                           then let B' = {J} (The singleton set containing J) and replace B with B' in C
 
-   3) If any B' was not equal to B in step 2 then repeat step 2 and reevaluate step 3 before
-      continuing to step 4
+    3) If any B' was not equal to B in step 2 then repeat step 2 and reevaluate step 3 before
+       continuing to step 4
 
-   4) Construct the output board from the new [reduced] board domain as follows:
-      - Each cell domain that is a singleton set becomes a cell containing the value in the singleton
-      - Each cell domain with cardinality >= 2 becomes an empty cell
+    4) Construct the output board from the new [reduced] board domain as follows:
+       - Each cell domain that is a singleton set becomes a cell containing the value in the singleton
+       - Each cell domain with cardinality >= 2 becomes an empty cell
 
 
 *)
-Printexc.record_backtrace true;;
+(*Printexc.record_backtrace true;;*)
 open Types;;
 open Printutils;;
 
-let nargs = (Array.length Sys.argv) - 1;;
-if nargs != 1 then (Printf.printf "Please specify an input filename.\n" ; exit 1);;
+let pp = Printf.printf ;;
 
-let filename = Sys.argv.(1) ;;
+let usage () =
+   (pp "Usage: sudoku [--verbose] filename\n" ; exit 1 )
+   ;;
+
+let nargs = (Array.length Sys.argv) - 1;;
+if nargs < 1 then usage ();;
+let a1 = Sys.argv.(1) ;;
+let verbose = String.equal a1 "--verbose" ;;
+if verbose && (nargs != 2) then usage () ;;
+if not verbose && (nargs != 1) then usage () ;;
+let filename =
+   if not verbose then a1
+   else Sys.argv.(2)
+   ;;
 
 (* rw is root width. 2 means you get a 4*4 board, 3 means 9*9
    input_board is a list of int options *)
@@ -81,7 +96,6 @@ let rw, input_board = Puzzle_loader.puzzle_from_file filename;;
 let w = rw * rw ;; (* width *)
 let n_cells = w * w ;; (* total number of cells on the board *)
 
-let pp = Printf.printf ;;
 
 (* Set of all numbers that can be placed in a cell *)
 let cell_domain = IntSet.of_list (List.init w (fun x -> x+1)) ;;
@@ -159,11 +173,11 @@ let block_pattern n =
    this is simply a grid where each cell is a singleton set containing the
    input constraint, or is the domain of a cell (e.g. 1 to 9 for a 9x9 puzzle) *)
 let domain board =
-    let this_cell_domain i v =
+    let this_cell_domain v =
         match v with
             | Some(a) -> IntSet.singleton a
             | None -> cell_domain
-    in List.mapi this_cell_domain board
+    in List.map this_cell_domain board
     ;;
 
 (* Imperitive code! Oh my! (this function was hard to think about functionally) :P
@@ -242,8 +256,33 @@ let reduce_domain d =
             | _ -> (* all other cases solved from largest sets to smallest sets *)
                 let d1 = reduce_domain_for_size n d
                 in reduce_domain_inner (n - 1) d1
-    in pp "\n###########################\n\n";
-    reduce_domain_inner (w - 1) d
+    in reduce_domain_inner (w - 1) d
+    ;;
+
+let single_options old_sets i =
+    let just_i = IntSet.singleton i in
+    let contains_i s = not (IntSet.equal s (IntSet.diff s just_i)) in
+    let sets_with_i = List.filter contains_i old_sets in
+    let n_sets_with_i = List.length sets_with_i in
+    if n_sets_with_i <> 1 then
+        old_sets
+    else
+        List.map (fun s ->
+            if contains_i s then just_i else s
+        ) old_sets
+
+let reduce_single_options d =
+    let patterns = [row_pattern; col_pattern; block_pattern] in
+    let range = List.init w (function i -> i) in
+    let all_groups = cross patterns range in
+    let check_group_for_value pattern i d2 j =
+        let g = pattern i in
+        let old_sets = subboard d2 g in
+        let new_sets = single_options old_sets j in
+        splice_domain d2 new_sets g in
+    let check_group d1 (pattern, i) =
+        List.fold_left (check_group_for_value pattern i) d1 range in
+    List.fold_left check_group d all_groups
     ;;
 
 (* find the board, in the given domain, containing all fully constrained cells *)
@@ -257,17 +296,18 @@ let domains_equal a b =
 
 (* Apply the constraint solver repeatedly until board is stable *)
 let rec solved_domain d =
-    let d1 = reduce_domain d
-    in let stable = domains_equal d d1
-    in print_domain d rw;
-    if stable then d1 else solved_domain d1
+    let d1 = reduce_domain d in (* Step 2A *)
+    let d2 = reduce_single_options d1 in (* Step 2B *)
+    let stable = domains_equal d d2 in
+    (if verbose then (print_domain d rw; pp "\n###########################\n\n";));
+    if stable then d2 else solved_domain d2 (* Step 3 *)
     ;;
 
 (* Solve an input board *)
 let solved b =
-    let d = domain b
-    in let final_domain = solved_domain d
-    in (fully_constrained_cells final_domain, final_domain)
+    let d = domain b (* Step 1 *)
+    in let final_domain = solved_domain d (* Steps 2, and 3 *)
+    in (fully_constrained_cells final_domain, final_domain) (* Step 4 *)
     ;;
 
 (* Just ocaml 4.07 things ;P *)
@@ -277,7 +317,7 @@ let is_fully_constrained b =
     (List.length (List.filter (is_some) b)) == (List.length b)
     ;;
 
-Printf.printf "Initial board state...\n" ;;
+pp "Initial board state...\n" ;;
 print_board input_board rw;;
 
 let find_dups l s =
@@ -297,7 +337,7 @@ let check_overconstrained board =
         let set = IntSet.of_seq (List.to_seq filtered) in
         if (List.length filtered) > (IntSet.cardinal set) then
             let duplicates = find_dups filtered set in
-            Printf.printf "Input puzzle is overconstrained.\n%s %d contains multiple instance of the value %d\n" name (index + 1) (List.hd duplicates); exit 1
+            pp "Input puzzle is overconstrained.\n%s %d contains multiple instance of the value %d\n" name (index + 1) (List.hd duplicates); exit 1
     in List.iter check (cross patterns range)
     ;;
 
@@ -311,12 +351,12 @@ check_overconstrained input_board ;;
 let (solved_board, final_domain)  = solved input_board ;;
 
 if is_unsolvable final_domain then
-    Printf.printf "The input board has no solutions. Some cells were found to have empty domains.\n"
+    pp "The input board has no solutions. Some cells were found to have empty domains.\n"
 else (
     if not (is_fully_constrained solved_board) then
-        Printf.printf "The input board has multiple solutions.\n"
+        pp "The input board has multiple solutions.\n"
     else
-        Printf.printf "The input board has exactly one solution.\n";
+        pp "The input board has exactly one solution.\n";
     print_board solved_board rw
 )
 ;;
