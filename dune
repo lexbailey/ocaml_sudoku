@@ -1,0 +1,10 @@
+(env
+    (dev
+        (flags (:standard -warn-error -A))
+    )
+)
+
+(executable
+    (name sudoku)
+    (libraries ANSITerminal)
+)

@@ -65,10 +65,10 @@ let nth_of_each n l =
 
 (* s is a list of lists of strings *)
 let boxes s bw bh =
-    let top = String.concat " " (List.map (function _ -> box_top bw) s)
-    and bot = String.concat " " (List.map (function _ -> box_bottom bw) s)
+    let top = String.concat "" (List.map (function _ -> box_top bw) s)
+    and bot = String.concat "" (List.map (function _ -> box_bottom bw) s)
     and range = List.init bh (function i -> i)
-    in let mids = List.map (function ss -> String.concat " " (List.map box_section ss)) (List.map (function n -> nth_of_each n s) range)
+    in let mids = List.map (function ss -> String.concat "" (List.map box_section ss)) (List.map (function n -> nth_of_each n s) range)
     in let mid = String.concat "\n" mids
     in String.concat "\n" [top; mid; bot; ""]
     ;;
@@ -110,4 +110,24 @@ let box_grid b width height el_width els_per_line max_el_lines =
     )
     ;;
 
-let print_domain d rw = let w = rw * rw in Printf.printf "%s" (box_grid d w w rw rw rw) ;;
+
+let choose_size rw iw ih =
+    let t_width, t_height = ANSITerminal.size () in
+    let el_width = (max_cell_width rw) + 1 in
+    let tot_width = ((iw * (el_width+1)) + 2) * (rw * rw) in
+    if tot_width <= t_width then (rw, rw)
+    else
+        let f_width = Float.of_int (rw*rw) in
+        let per_cell = Float.floor (Float.div (Float.of_int t_width) f_width) in
+        let num_nums = Float.floor (Float.div (Float.sub per_cell 2.0) (Float.of_int (el_width+1))) in
+        let per_row = max 1 (Float.to_int num_nums) in
+        let per_col = Float.to_int (Float.ceil (Float.div f_width (Float.of_int per_row))) in
+        (per_row, per_col)
+    ;;
+
+let print_domain d rw =
+    let w = rw * rw in
+    let el_width = (max_cell_width rw) + 1 in
+    let (cw, ch) = choose_size rw rw rw in
+    Printf.printf "%s" (box_grid d w w el_width cw ch)
+    ;;

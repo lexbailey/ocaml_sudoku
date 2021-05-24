@@ -65,10 +65,18 @@ The algorithm:
 
 
 *)
+Printexc.record_backtrace true;;
 open Types;;
 open Printutils;;
 
-let rw = 3 ;; (* root width. 2 means you get a 4*4 board, 3 means 9*9 *)
+let nargs = (Array.length Sys.argv) - 1;;
+if nargs != 1 then (Printf.printf "Please specify an input filename.\n" ; exit 1);;
+
+let filename = Sys.argv.(1) ;;
+
+(* rw is root width. 2 means you get a 4*4 board, 3 means 9*9
+   input_board is a list of int options *)
+let rw, input_board = Puzzle_loader.puzzle_from_file filename;;
 
 let w = rw * rw ;; (* width *)
 let n_cells = w * w ;; (* total number of cells on the board *)
@@ -77,65 +85,6 @@ let pp = Printf.printf ;;
 
 (* Set of all numbers that can be placed in a cell *)
 let cell_domain = IntSet.of_list (List.init w (fun x -> x+1)) ;;
-
-(*
-let test_board =
-    [ None; None; None; Some(1)
-    ; Some(1); Some(2); None; None
-    ; None; None; None; None
-    ; None; None; None; None
-    ] ;;
-*)
-
-
-let test_board =
-    [ None;    None;    None;      None;    None;    None;      Some(6); Some(1); Some(9);
-      None;    Some(2); Some(3);   None;    Some(9); None;      None;    None;    None;
-      None;    None;    None;      Some(1); Some(4); None;      None;    Some(2); None;
-
-      None;    None;    Some(9);   None;    None;    None;      None;    None;    None;
-      Some(7); None;    Some(8);   None;    None;    Some(3);   None;    None;    None;
-      None;    None;    None;      None;    None;    Some(5);   Some(3); Some(4); None;
-
-      None;    None;    None;      None;    None;    None;      Some(4); Some(6); Some(7);
-      Some(8); Some(3); None;      None;    None;    None;      None;    None;    None;
-      None;    None;    None;      Some(6); Some(1); Some(2);   None;    None;    None;
-    ] ;;
-
-(*
-let test_board_ =
-    [
-      Some( 1); Some( 2); Some(-1); Some(11);   Some(-1); Some(-1); Some(-1); Some(16);   Some(-1); Some(-1); Some(14); Some(-1);   Some(-1); Some(-1); Some( 4); Some(-1);
-      Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(11); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some( 1); Some(-1);
-      Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some( 3); Some( 5); Some(-1);
-      Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some( 7);   Some(-1); Some(-1); Some(16); Some(-1);
-
-      Some(-1); Some( 8); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some( 1);
-      Some( 2); Some( 5); Some(13); Some(10);   Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some( 1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some( 4);
-      Some(-1); Some( 3); Some(-1); Some(-1);   Some( 4); Some( 6); Some(16); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some( 7);
-      Some(-1); Some( 9); Some(-1); Some(12);   Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some( 2); Some(-1);   Some(-1); Some(-1); Some(-1); Some( 8);
-
-      Some(-1); Some(-1); Some( 2); Some(-1);   Some(-1); Some( 5); Some(-1); Some(-1);   Some(-1); Some(-1); Some( 3); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1);
-      Some(-1); Some(-1); Some( 8); Some(-1);   Some(-1); Some(-1); Some( 3); Some(-1);   Some(-1); Some( 5); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1);
-      Some(-1); Some(-1); Some( 6); Some(-1);   Some( 2); Some(-1); Some(-1); Some(13);   Some(12); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1);
-      Some( 5); Some(-1); Some(-1); Some(-1);   Some( 1); Some(14); Some(12); Some(-1);   Some( 1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1);
-
-      Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some( 2);
-      Some( 3); Some( 2); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1);   Some( 7); Some(-1); Some(-1); Some(11);
-      Some(-1); Some(-1); Some(-1); Some(-1);   Some( 3); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some(-1);   Some(-1); Some(-1); Some(-1); Some(14);
-      Some(12); Some(-1); Some(-1); Some( 7);   Some(-1); Some(-1); Some(-1); Some(-1);   Some( 8); Some( 9); Some(10); Some(11);   Some(-1); Some(-1); Some(-1); Some(16);
-    ] ;;
-
-let noneify b =
-    List.map (function m ->
-        match m with
-            | Some(-1) -> None
-            | Some(a) -> Some(a)
-            | None -> None
-    ) b;;
-
-let test_board = noneify test_board_
-*)
 
 (* List.filter_map introduced in 4.08, but I'm using 4.07 T_T *)
 let filter_map f l =
@@ -311,10 +260,19 @@ let solved b =
     in fully_constrained_cells (solved_domain d)
     ;;
 
-Printf.printf "Initial board state...\n" ;;
-print_board test_board rw;;
+(* Just ocaml 4.07 things ;P *)
+let is_some a = match a with | Some(_) -> true | None -> false ;; (* Option.is_some introduced in 4.08 *)
 
-let solved_board = solved test_board ;;
+let is_fully_constrained b =
+   (List.length (List.filter (is_some) b)) == (List.length b)
+   ;;
+
+Printf.printf "Initial board state...\n" ;;
+print_board input_board rw;;
+
+let solved_board = solved input_board ;;
 
 Printf.printf "After solving:\n" ;;
 print_board solved_board rw;;
+
+if not (is_fully_constrained solved_board) then Printf.printf "The input board has multiple solutions.\n";;
