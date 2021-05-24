@@ -86,6 +86,15 @@ let pp = Printf.printf ;;
 (* Set of all numbers that can be placed in a cell *)
 let cell_domain = IntSet.of_list (List.init w (fun x -> x+1)) ;;
 
+(* Check for invalid cells *)
+List.iter (fun cell ->
+    match cell with
+        | Some(c) -> (if not (IntSet.exists ((==) c) cell_domain) then (Printf.printf "Board contains cells with invalid values. %d is not allowed on a board of side length %d\n" c w ; exit 1))
+        | None -> ()
+) input_board
+
+
+
 (* List.filter_map introduced in 4.08, but I'm using 4.07 T_T *)
 let filter_map f l =
     let unwrap a = (
@@ -257,22 +266,57 @@ let rec solved_domain d =
 (* Solve an input board *)
 let solved b =
     let d = domain b
-    in fully_constrained_cells (solved_domain d)
+    in let final_domain = solved_domain d
+    in (fully_constrained_cells final_domain, final_domain)
     ;;
 
 (* Just ocaml 4.07 things ;P *)
 let is_some a = match a with | Some(_) -> true | None -> false ;; (* Option.is_some introduced in 4.08 *)
 
 let is_fully_constrained b =
-   (List.length (List.filter (is_some) b)) == (List.length b)
-   ;;
+    (List.length (List.filter (is_some) b)) == (List.length b)
+    ;;
 
 Printf.printf "Initial board state...\n" ;;
 print_board input_board rw;;
 
-let solved_board = solved input_board ;;
+let find_dups l s =
+    let sl = List.of_seq (IntSet.to_seq s) in
+    filter_map (fun i ->
+        if List.length (List.find_all ((==) i) l) > 1 then Some(i) else None
+    ) sl
+    ;;
 
-Printf.printf "After solving:\n" ;;
-print_board solved_board rw;;
+(* Check for overconstrained start conditions *)
+let check_overconstrained board =
+    let patterns = [("Row",row_pattern); ("Column", col_pattern); ("Block", block_pattern)] in
+    let range = List.init w (function i -> i) in
+    let check ((name, pattern), index) =
+        let group = subboard board (pattern index) in
+        let filtered = filter_map (fun a -> a) group in
+        let set = IntSet.of_seq (List.to_seq filtered) in
+        if (List.length filtered) > (IntSet.cardinal set) then
+            let duplicates = find_dups filtered set in
+            Printf.printf "Input puzzle is overconstrained.\n%s %d contains multiple instance of the value %d\n" name (index + 1) (List.hd duplicates); exit 1
+    in List.iter check (cross patterns range)
+    ;;
 
-if not (is_fully_constrained solved_board) then Printf.printf "The input board has multiple solutions.\n";;
+let is_unsolvable domain =
+    let emptys = List.filter (IntSet.is_empty) domain in
+        (List.length emptys) > 0
+    ;;
+
+check_overconstrained input_board ;;
+
+let (solved_board, final_domain)  = solved input_board ;;
+
+if is_unsolvable final_domain then
+    Printf.printf "The input board has no solutions. Some cells were found to have empty domains.\n"
+else (
+    if not (is_fully_constrained solved_board) then
+        Printf.printf "The input board has multiple solutions.\n"
+    else
+        Printf.printf "The input board has exactly one solution.\n";
+    print_board solved_board rw
+)
+;;
