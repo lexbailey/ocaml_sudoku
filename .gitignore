@@ -1,3 +1,4 @@
 sudoku
-*.cmo
-*.cmi
+_build
+dune-project
+.merlin
